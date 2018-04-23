@@ -20,7 +20,14 @@ const defaultOpts = {
   port: 1883,
   httpPort: 1884,
   noStart: false,
-  skipCacheInvalidation: false
+  skipCacheInvalidation: false,
+  backend: {
+    type: "mqtt",
+    json: false,
+    mqtt,
+    host: "127.0.0.1",
+    port: 1883
+  }
 }
 
 class ServerlessIotLocal {
@@ -97,7 +104,7 @@ class ServerlessIotLocal {
   }
 
   _createMQTTBroker() {
-    const { host, port, httpPort } = this.options
+    const { host, port, httpPort, backend } = this.options
     this.mqttBroker = createMQTTBroker({
       host,
       port,
@@ -105,7 +112,8 @@ class ServerlessIotLocal {
         host,
         port: httpPort,
         bundle: true
-      }
+      },
+      backend
     })
 
     const endpointAddress = `${IP.address()}:${httpPort}`
