@@ -1,12 +1,10 @@
 const mosca = require('mosca')
-const redis = require('redis')
 const ascoltatore = {
-  type: 'redis',
-  redis,
-  db: 12,
-  port: 6379,
-  return_buffers: true, // to handle binary payloads
-  host: 'localhost'
+  type: "mqtt",
+  json: false,
+  mqtt: require("mqtt"),
+  host: "127.0.0.1",
+  port: 1883
 }
 
 const moscaSettings = {
