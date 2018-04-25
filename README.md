@@ -17,10 +17,7 @@ plugins:
 ```
 
 ## Usage
-1. Start redis:  
-    `redis-server`
-
-2. If you're using [serverless-offline](https://github.com/dherault/serverless-offline), you can run:  
+1. If you're using [serverless-offline](https://github.com/dherault/serverless-offline), you can run:  
 
     `sls offline start`
 
@@ -61,6 +58,8 @@ plugins:
 ## Todo
 
 - Improve support of AWS Iot SQL syntax
+
+## Known issuses
 
 ## License
 [MIT](LICENSE)
