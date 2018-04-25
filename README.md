@@ -4,7 +4,6 @@ AWS Iot lifecycle and regular topic subscription events
 
 ## Prerequisites
 * serverless@1.x
-* Mosquitto https://mosquitto.org/download/
 
 ## Install
 
