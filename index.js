@@ -20,14 +20,7 @@ const defaultOpts = {
   port: 1883,
   httpPort: 1884,
   noStart: false,
-  skipCacheInvalidation: false,
-  backend: {
-    type: "mqtt",
-    json: false,
-    mqtt,
-    host: "127.0.0.1",
-    port: 1883
-  }
+  skipCacheInvalidation: false
 }
 
 class ServerlessIotLocal {

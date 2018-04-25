@@ -1,18 +1,7 @@
 const mosca = require('mosca')
-const ascoltatore = {
-  type: "mqtt",
-  json: false,
-  mqtt: require("mqtt"),
-  host: "127.0.0.1",
-  port: 1883
-}
 
 const moscaSettings = {
-  // port: 1883,
-  backend: ascoltatore,
-  persistence: {
-    factory: mosca.persistence.Redis
-  }
+  port: 1883
 }
 
 // fired when the mqtt server is ready
@@ -20,7 +9,7 @@ function setup() {
   console.log('Mosca server is up and running')
 }
 
-function createAWSLifecycleEvent ({ type, clientId, topics }) {
+function createAWSLifecycleEvent({ type, clientId, topics }) {
   // http://docs.aws.amazon.com/iot/latest/developerguide/life-cycle-events.html#subscribe-unsubscribe-events
   const event = {
     clientId,
@@ -37,7 +26,7 @@ function createAWSLifecycleEvent ({ type, clientId, topics }) {
   return event
 }
 
-function createBroker (opts) {
+function createBroker(opts) {
   opts = Object.assign({}, moscaSettings, opts)
   const server = new mosca.Server(opts)
   server.on('ready', setup)
