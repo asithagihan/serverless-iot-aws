@@ -5,11 +5,13 @@ const mqttMatch = require('mqtt-match')
 const realAWS = require('aws-sdk')
 const AWS = require('aws-sdk-mock')
 AWS.setSDK(path.resolve('node_modules/aws-sdk'))
+const IoTSDK = require("aws-iot-device-sdk");
 const extend = require('xtend')
 const IP = require('ip')
 const SQL = require('./sql')
 const evalInContext = require('./eval')
-const createMQTTBroker = require('./broker')
+
+import { getRandomInt } from "../mixins";
 // TODO: send PR to serverless-offline to export this
 const functionHelper = require('serverless-offline/src/functionHelper')
 const createLambdaContext = require('serverless-offline/src/createLambdaContext')
@@ -22,6 +24,8 @@ const defaultOpts = {
   noStart: false,
   skipCacheInvalidation: false
 }
+
+const IoTClientOptions = {}
 
 class ServerlessIotLocal {
   constructor(serverless, options) {
@@ -85,10 +89,16 @@ class ServerlessIotLocal {
     this.originalEnvironment = _.extend({ IS_OFFLINE: true }, process.env)
     this.options = _.merge({}, defaultOpts, (this.service.custom || {})['serverless-iot-local'], this.options)
     if (!this.options.noStart) {
-      this._createMQTTBroker()
+      //this._createMQTTBroker()
+      IoTClientOptions = this._getAWSConfig()
+      this.options = {
+        ...this.options,
+        ...IoTClientOptions
+      }
     }
 
-    this._createMQTTClient()
+    //this._createMQTTClient();
+    this._createAWSClient();
   }
 
   endHandler() {
@@ -96,55 +106,41 @@ class ServerlessIotLocal {
     this.mqttBroker.close()
   }
 
-  _createMQTTBroker() {
-    const { host, port, httpPort, backend } = this.options
-    this.mqttBroker = createMQTTBroker({
-      host,
-      port,
-      http: {
-        host,
-        port: httpPort,
-        bundle: true
-      },
-      backend
-    })
+  _getAWSConfig() {
+    const config = {
+      accessKeyId: this.options.accessKeyId,
+      secretAccessKey: this.options.secretKey,
+      region: this.options.sessionToken
+    };
+    AWS.config.update(config);
 
-    const endpointAddress = `${IP.address()}:${httpPort}`
+    const STS = new AWS.STS();
+    const roleName = this.options.roleName;
 
-    // prime AWS IotData import
-    // this is necessary for below mock to work
-    // eslint-disable-next-line no-unused-vars
-    const notUsed = new realAWS.IotData({
-      endpoint: endpointAddress,
-      region: 'us-east-1'
-    })
+    return new Promise((resolve, reject) => {
+      STS.getCallerIdentity({}, (error, data) => {
+        if (error) reject(error);
 
-    AWS.mock('IotData', 'publish', (params, callback) => {
-      const { topic, payload } = params
-      this.mqttBroker.publish({ topic, payload }, callback)
-    })
+        const params = {
+          RoleArn: `arn:aws:iam::${data.Account}:role/${roleName}`,
+          RoleSessionName: getRandomInt().toString()
+        };
+        STS.assumeRole(params, (err, { Credentials }) => {
+          if (err) reject(err);
 
-    AWS.mock('Iot', 'describeEndpoint', callback => {
-      process.nextTick(() => {
-        callback(null, { endpointAddress })
-      })
-    })
+          resolve({
+            ...Credentials,
+            region: this.options.region,
+            host: this.options.endPoint
+          });
+        });
+      });
+    });
 
-    this.log(`Iot broker listening on ports: ${port} (mqtt) and ${httpPort} (http)`)
   }
 
-  _getServerlessOfflinePort() {
-    // hackeroni!
-    const offline = this.serverless.pluginManager.plugins.find(
-      plugin => plugin.commands && plugin.commands.offline
-    )
+  _createAWSClient() {
 
-    if (offline) {
-      return offline.options.port
-    }
-  }
-
-  _createMQTTClient() {
     const { port, httpPort, location } = this.options
     const topicsToFunctionsMap = {}
     const { runtime } = this.service.provider
@@ -191,14 +187,48 @@ class ServerlessIotLocal {
           select: parsed.select
         })
       })
-    })
+    });
 
-    const client = mqtt.connect(`ws://localhost:${httpPort}/mqqt`)
+    const client = IoTSDK.device({
+      clientId: this.options.clientId || clientId,
+      region: this.options.region,
+      host: this.options.host,
+      protocol: this.options.protocol || "wss",
+
+      // Reconnect timeout
+      baseReconnectTimeMs: this.options.baseReconnectTimeMs || 250,
+      maximumReconnectTimeMs: this.options.maximumReconnectTimeMs || 500,
+
+      // Enable console debugging information
+      debug: typeof options.debug === "undefined" ? true : this.options.debug,
+
+      // AWS access key ID, secret key and session token must be
+      // initialized with empty strings
+      accessKeyId: this.options.accessKeyId || "",
+      secretKey: this.options.secretKey || "",
+      sessionToken: this.options.sessionToken || "",
+
+      // Dissable auto subscription
+      autoResubscribe:
+        typeof this.options.debug === "undefined" ? false : this.options.autoResubscribe
+    });
+
     client.on('error', console.error)
 
     const connectMonitor = setInterval(() => {
       this.log(`still haven't connected to local Iot broker!`)
     }, 5000).unref()
+
+    AWS.mock('IotData', 'publish', (params, callback) => {
+      const { topic, payload } = params
+      client.publish(topic, payload,{}, callback)
+    })
+
+    AWS.mock('Iot', 'describeEndpoint', callback => {
+      process.nextTick(() => {
+        callback(null, { endpointAddress })
+      })
+    })
 
     client.on('connect', () => {
       clearInterval(connectMonitor)
@@ -258,6 +288,237 @@ class ServerlessIotLocal {
       })
     })
   }
+
+  // _createMQTTBroker() {
+  //   const { host, port, httpPort, backend } = this.options
+  //   IoTClientOptions = IoT.getTemporaryCredentials();
+
+  //   this.mqttBroker = createMQTTBroker({
+  //     host,
+  //     port,
+  //     http: {
+  //       host,
+  //       port: httpPort,
+  //       bundle: true
+  //     },
+  //     backend
+  //   })
+
+  //   const endpointAddress = `${IP.address()}:${httpPort}`
+
+  //   // prime AWS IotData import
+  //   // this is necessary for below mock to work
+  //   // eslint-disable-next-line no-unused-vars
+  //   const notUsed = new realAWS.IotData({
+  //     endpoint: endpointAddress,
+  //     region: 'us-east-1'
+  //   })
+
+  //   AWS.mock('IotData', 'publish', (params, callback) => {
+  //     const { topic, payload } = params
+  //     this.mqttBroker.publish({ topic, payload }, callback)
+  //   })
+
+  //   AWS.mock('Iot', 'describeEndpoint', callback => {
+  //     process.nextTick(() => {
+  //       callback(null, { endpointAddress })
+  //     })
+  //   })
+
+  //   this.log(`Iot broker listening on ports: ${port} (mqtt) and ${httpPort} (http)`)
+  // }
+
+  _getServerlessOfflinePort() {
+    // hackeroni!
+    const offline = this.serverless.pluginManager.plugins.find(
+      plugin => plugin.commands && plugin.commands.offline
+    )
+
+    if (offline) {
+      return offline.options.port
+    }
+  }
+
+  // _createMQTTClient() {
+  //   const { port, httpPort, location } = this.options
+  //   const topicsToFunctionsMap = {}
+  //   const { runtime } = this.service.provider
+  //   Object.keys(this.service.functions).forEach(key => {
+  //     const fun = this._getFunction(key)
+  //     const funName = key
+  //     const servicePath = path.join(this.serverless.config.servicePath, location)
+  //     const funOptions = functionHelper.getFunctionOptions(fun, key, servicePath)
+  //     this.debug(`funOptions ${JSON.stringify(funOptions, null, 2)} `)
+
+  //     if (!fun.environment) {
+  //       fun.environment = {}
+  //     }
+
+  //     fun.environment.AWS_LAMBDA_FUNCTION_NAME = `${this.service.service}-${this.service.provider.stage}-${funName}`
+
+  //     this.debug('')
+  //     this.debug(funName, 'runtime', runtime, funOptions.babelOptions || '')
+  //     this.debug(`events for ${funName}:`)
+
+  //     if (!(fun.events && fun.events.length)) {
+  //       this.debug('(none)')
+  //       return
+  //     }
+
+  //     fun.events.forEach(event => {
+  //       if (!event.iot) return this.debug('(none)')
+
+  //       const { iot } = event
+  //       const { sql } = iot
+  //       // hack
+  //       // assumes SELECT ... topic() as topic
+  //       const parsed = SQL.parseSelect(sql)
+  //       const topicMatcher = parsed.topic
+  //       if (!topicsToFunctionsMap[topicMatcher]) {
+  //         topicsToFunctionsMap[topicMatcher] = []
+  //       }
+
+  //       this.debug('topicMatcher')
+  //       topicsToFunctionsMap[topicMatcher].push({
+  //         fn: fun,
+  //         name: key,
+  //         options: funOptions,
+  //         select: parsed.select
+  //       })
+  //     })
+  //   })
+
+  //   const iotClient = IotClient.init({
+  //     region: IoTClientOptions.region,
+  //     host: IoTClientOptions.host,
+  //     accessKeyId: IoTClientOptions.AccessKeyId,
+  //     secretKey: IoTClientOptions.SecretAccessKey,
+  //     sessionToken: IoTClientOptions.SessionToken
+  //   });
+
+  //   iotClient.onConnect(() => {
+  //     clearInterval(connectMonitor)
+  //     this.log('connected to local Iot broker')
+  //     for (let topicMatcher in topicsToFunctionsMap) {
+  //       client.subscribe(topicMatcher)
+  //     }
+  //   });
+
+  //   iotClient.onSubscribe((topic, message) => {
+  //     const matches = Object.keys(topicsToFunctionsMap)
+  //       .filter(topicMatcher => mqttMatch(topicMatcher, topic))
+
+  //     if (!matches.length) return
+
+  //     let clientId
+  //     if (/^\$aws\/events/.test(topic)) {
+  //       clientId = topic.slice(topic.lastIndexOf('/') + 1)
+  //     } else {
+  //       // hmm...
+  //     }
+
+  //     const apiGWPort = this._getServerlessOfflinePort()
+  //     matches.forEach(topicMatcher => {
+  //       let functions = topicsToFunctionsMap[topicMatcher]
+  //       functions.forEach(fnInfo => {
+  //         const { fn, name, options, select } = fnInfo
+  //         const requestId = Math.random().toString().slice(2)
+  //         this.requests[requestId] = { done: false }
+
+  //         const event = SQL.applySelect({
+  //           select,
+  //           payload: message,
+  //           context: {
+  //             topic: () => topic,
+  //             clientid: () => clientId
+  //           }
+  //         })
+
+  //         let handler // The lambda function
+  //         try {
+  //           process.env = _.extend({}, this.service.provider.environment, this.service.functions[name].environment, this.originalEnvironment)
+  //           process.env.SERVERLESS_OFFLINE_PORT = apiGWPort
+  //           handler = functionHelper.createHandler(options, this.options)
+  //         } catch (err) {
+  //           this.log(`Error while loading ${name}: ${err.stack}, ${requestId}`)
+  //           return
+  //         }
+
+  //         const lambdaContext = createLambdaContext(fn)
+  //         try {
+  //           handler(event, lambdaContext, lambdaContext.done)
+  //         } catch (error) {
+  //           this.log(`Uncaught error in your '${name}' handler: ${error.stack}, ${requestId}`)
+  //         }
+  //       })
+  //     })
+  //   });
+
+  //   const client = mqtt.connect(`ws://localhost:${httpPort}/mqqt`)
+  //   client.on('error', console.error)
+
+  //   const connectMonitor = setInterval(() => {
+  //     this.log(`still haven't connected to local Iot broker!`)
+  //   }, 5000).unref()
+
+  //   client.on('connect', () => {
+  //     clearInterval(connectMonitor)
+  //     this.log('connected to local Iot broker')
+  //     for (let topicMatcher in topicsToFunctionsMap) {
+  //       client.subscribe(topicMatcher)
+  //     }
+  //   })
+
+  //   client.on('message', (topic, message) => {
+  //     const matches = Object.keys(topicsToFunctionsMap)
+  //       .filter(topicMatcher => mqttMatch(topicMatcher, topic))
+
+  //     if (!matches.length) return
+
+  //     let clientId
+  //     if (/^\$aws\/events/.test(topic)) {
+  //       clientId = topic.slice(topic.lastIndexOf('/') + 1)
+  //     } else {
+  //       // hmm...
+  //     }
+
+  //     const apiGWPort = this._getServerlessOfflinePort()
+  //     matches.forEach(topicMatcher => {
+  //       let functions = topicsToFunctionsMap[topicMatcher]
+  //       functions.forEach(fnInfo => {
+  //         const { fn, name, options, select } = fnInfo
+  //         const requestId = Math.random().toString().slice(2)
+  //         this.requests[requestId] = { done: false }
+
+  //         const event = SQL.applySelect({
+  //           select,
+  //           payload: message,
+  //           context: {
+  //             topic: () => topic,
+  //             clientid: () => clientId
+  //           }
+  //         })
+
+  //         let handler // The lambda function
+  //         try {
+  //           process.env = _.extend({}, this.service.provider.environment, this.service.functions[name].environment, this.originalEnvironment)
+  //           process.env.SERVERLESS_OFFLINE_PORT = apiGWPort
+  //           handler = functionHelper.createHandler(options, this.options)
+  //         } catch (err) {
+  //           this.log(`Error while loading ${name}: ${err.stack}, ${requestId}`)
+  //           return
+  //         }
+
+  //         const lambdaContext = createLambdaContext(fn)
+  //         try {
+  //           handler(event, lambdaContext, lambdaContext.done)
+  //         } catch (error) {
+  //           this.log(`Uncaught error in your '${name}' handler: ${error.stack}, ${requestId}`)
+  //         }
+  //       })
+  //     })
+  //   })
+  // }
 
   _getFunction(key) {
     const fun = this.service.getFunction(key)
