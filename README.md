@@ -33,7 +33,7 @@ The above options must be added to serverless.yml to set default configuration, 
 
 ```yml
 custom:
-  serverless-iot-local:
+  serverless-iot-aws:
     accessKeyId: ""
     secretKey: ""
     region : ""
@@ -43,11 +43,11 @@ custom:
 
 ### Using with serverless-offline plugin
 
-Place `serverless-iot-local` above `serverless-offline`
+Place `serverless-iot-aws` above `serverless-offline`
 
 ```yaml
 plugins:
-  - serverless-iot-local
+  - serverless-iot-aws
   - serverless-offline
 ```
 
