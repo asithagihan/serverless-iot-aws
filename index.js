@@ -96,22 +96,10 @@ class ServerlessIotLocal {
           ...ioTClientOptions,
           ...this.options
         };
-        console.log(this.options);
 
         this._createAWSClient();
       })
       .catch(error => console.log(error));
-    // if (!this.options.noStart) {
-    //   //this._createMQTTBroker()
-    //   const IoTClientOptions = this._getAWSConfig();
-    //   this.options = {
-    //     ...this.options,
-    //     ...IoTClientOptions
-    //   };
-    // }
-
-    // //this._createMQTTClient();
-    // this._createAWSClient();
   }
 
   endHandler() {
@@ -175,7 +163,7 @@ class ServerlessIotLocal {
 
       fun.environment.AWS_LAMBDA_FUNCTION_NAME = `${this.service.service}-${
         this.service.provider.stage
-      }-${funName}`;
+        }-${funName}`;
 
       this.debug("");
       this.debug(funName, "runtime", runtime, funOptions.babelOptions || "");
@@ -317,7 +305,7 @@ class ServerlessIotLocal {
           } catch (error) {
             this.log(
               `Uncaught error in your '${name}' handler: ${
-                error.stack
+              error.stack
               }, ${requestId}`
             );
           }

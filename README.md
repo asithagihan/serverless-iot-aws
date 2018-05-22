@@ -3,13 +3,14 @@
 AWS Iot lifecycle and regular topic subscription events
 
 ## Prerequisites
+
 * serverless@1.x
 
 ## Install
 
-1) `npm install --save serverless-iot-local`
+1. `npm install --save serverless-iot-local`
 
-2) In `serverless.yml` add `serverless-iot-local` to plugins:
+2. In `serverless.yml` add `serverless-iot-local` to plugins:
 
 ```yaml
 plugins:
@@ -17,32 +18,27 @@ plugins:
 ```
 
 ## Usage
-1. If you're using [serverless-offline](https://github.com/dherault/serverless-offline), you can run:  
 
-    `sls offline start`
+1. If you're using [serverless-offline](https://github.com/dherault/serverless-offline), you can run:
 
-    Otherwise run: 
-    
-    `sls iot start`
+   `sls offline start`
+
+   Otherwise run:
+
+   `sls iot start`
 
 CLI options are optional:
 
-```
---port                -p  Port to listen on. Default: 1883
---httpPort            -h  Port for WebSocket connections. Default: 1884
---noStart             -n  Prevent Iot broker (Mosca MQTT brorker) from being started (if you already have one)
---skipCacheValidation -c  Tells the plugin to skip require cache invalidation. A script reloading tool like Nodemon might then be needed (same as serverless-offline)
-```
-
-The above options can be added to serverless.yml to set default configuration, e.g.:
+The above options must be added to serverless.yml to set default configuration, e.g.:
 
 ```yml
 custom:
   serverless-iot-local:
-    start:
-      port: 1884
-    # Uncomment only if you already have an MQTT server running locally
-    # noStart: true
+    accessKeyId: ""
+    secretKey: ""
+    region : ""
+    roleName : ""
+    host: ""
 ```
 
 ### Using with serverless-offline plugin
@@ -57,9 +53,10 @@ plugins:
 
 ## Todo
 
-- Improve support of AWS Iot SQL syntax
+* Improve support of AWS Iot SQL syntax
 
 ## Known issuses
 
 ## License
+
 [MIT](LICENSE)
