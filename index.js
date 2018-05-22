@@ -86,7 +86,7 @@ class ServerlessIotLocal {
     this.options = _.merge(
       {},
       defaultOpts,
-      (this.service.custom || {})["serverless-iot-local"],
+      (this.service.custom || {})["serverless-iot-aws"],
       this.options
     );
 
