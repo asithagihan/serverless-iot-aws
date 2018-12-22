@@ -1,4 +1,4 @@
-# serverless-iot-local
+# serverless-iot-aws
 
 AWS Iot lifecycle and regular topic subscription events
 
@@ -8,13 +8,13 @@ AWS Iot lifecycle and regular topic subscription events
 
 ## Install
 
-1. `npm install --save serverless-iot-local`
+1. `npm install --save serverless-iot-aws`
 
-2. In `serverless.yml` add `serverless-iot-local` to plugins:
+2. In `serverless.yml` add `serverless-iot-aws` to plugins:
 
 ```yaml
 plugins:
-  - serverless-iot-local
+  - serverless-iot-aws
 ```
 
 ## Usage
